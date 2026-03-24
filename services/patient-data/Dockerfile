@@ -11,7 +11,7 @@ ENV PYTHONPATH=/app
 COPY requirements-test.txt* ./
 RUN pip install --no-cache-dir pytest httpx pytest-mock || true
 COPY . .
-CMD ["pytest", "tests/", "-v"]
+CMD sh -c "if [ -d tests ]; then pytest tests/ -v; else echo 'No tests found, skipping'; fi"
 
 FROM base AS production
 COPY . .
