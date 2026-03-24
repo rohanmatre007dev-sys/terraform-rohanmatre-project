@@ -275,6 +275,18 @@ jobs:
           IDS=$(terraform output -json ec2_instance_ids)
           echo "instance_ids=$IDS" >> $GITHUB_OUTPUT
 
+      - name: Wait for EC2 + SSM — India
+        run: |
+          IDS=$(echo '${{ steps.ec2.outputs.instance_ids }}' | jq -r '. | join(" ")')
+
+          echo "Waiting for EC2 instances..."
+          aws ec2 wait instance-running \
+            --instance-ids $IDS \
+            --region ap-south-1
+
+          echo "Waiting for SSM agent..."
+          sleep 60
+
       - name: Deploy containers via SSM — India
         run: |
           INSTANCE_IDS=$(echo '${{ steps.ec2.outputs.instance_ids }}' | jq -r '.[]')
@@ -393,6 +405,16 @@ jobs:
           IDS=$(terraform output -json ec2_instance_ids)
           echo "instance_ids=$IDS" >> $GITHUB_OUTPUT
 
+      - name: Wait for EC2 + SSM — Europe
+        run: |
+          IDS=$(echo '${{ steps.ec2.outputs.instance_ids }}' | jq -r '. | join(" ")')
+
+          aws ec2 wait instance-running \
+            --instance-ids $IDS \
+            --region eu-west-1
+
+          sleep 60
+
       - name: Deploy containers via SSM — Europe
         run: |
           INSTANCE_IDS=$(echo '${{ steps.ec2.outputs.instance_ids }}' | jq -r '.[]')
@@ -496,6 +518,16 @@ jobs:
         run: |
           IDS=$(terraform output -json ec2_instance_ids)
           echo "instance_ids=$IDS" >> $GITHUB_OUTPUT
+
+      - name: Wait for EC2 + SSM — USA
+        run: |
+          IDS=$(echo '${{ steps.ec2.outputs.instance_ids }}' | jq -r '. | join(" ")')
+
+          aws ec2 wait instance-running \
+            --instance-ids $IDS \
+            --region us-east-1
+
+          sleep 60
 
       - name: Deploy containers via SSM — USA
         run: |
