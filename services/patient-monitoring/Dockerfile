@@ -9,6 +9,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Test stage
 FROM base AS test
+
+ENV PYTHONPATH=/app
+
 COPY requirements-test.txt .
 RUN pip install --no-cache-dir -r requirements-test.txt
 COPY . .
