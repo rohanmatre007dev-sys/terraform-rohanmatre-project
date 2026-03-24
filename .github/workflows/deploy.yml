@@ -131,7 +131,7 @@ jobs:
           aws-region: ap-south-1
 
       - run: terraform init
-      - run: terraform validate -var="aws_region=ap-south-1"
+      - run: terraform validate
       - run: |
           terraform plan \
             -out=tfplan-india.binary \
@@ -172,7 +172,7 @@ jobs:
           aws-region: eu-west-1
 
       - run: terraform init
-      - run: terraform validate -var="aws_region=eu-west-1"
+      - run: terraform validate
       - run: terraform plan -out=tfplan-europe.binary -var="ecr_registry=${{ env.ECR_REGISTRY }}" -var="aws_region=eu-west-1" -var="ami_id=ami-0d1b55a6d77a0c326"
 
       - name: Upload plan
@@ -208,7 +208,7 @@ jobs:
           aws-region: us-east-1
 
       - run: terraform init
-      - run: terraform validate -var="aws_region=us-east-1"
+      - run: terraform validate
       - run: terraform plan -out=tfplan-usa.binary -var="ecr_registry=${{ env.ECR_REGISTRY }}" -var="aws_region=us-east-1" -var="ami_id=ami-02dfbd4ff395f2a1b"
 
       - name: Upload plan
