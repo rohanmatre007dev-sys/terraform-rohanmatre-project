@@ -5,6 +5,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 FROM base AS test
+
+ENV PYTHONPATH=/app
+
 COPY requirements-test.txt* ./
 RUN pip install --no-cache-dir pytest httpx pytest-mock || true
 COPY . .
