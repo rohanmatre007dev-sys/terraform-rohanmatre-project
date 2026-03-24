@@ -137,7 +137,8 @@ jobs:
             -out=tfplan-india.binary \
             -var="ecr_registry=${{ env.ECR_REGISTRY }}" \
             -var="aws_region=ap-south-1" \
-            -var="ami_id=ami-0f559c3642608c138"
+            -var="ami_id=ami-0f559c3642608c138" \
+            -lock=false
 
       - name: Upload plan
         uses: actions/upload-artifact@v4
@@ -173,7 +174,7 @@ jobs:
 
       - run: terraform init
       - run: terraform validate
-      - run: terraform plan -out=tfplan-europe.binary -var="ecr_registry=${{ env.ECR_REGISTRY }}" -var="aws_region=eu-west-1" -var="ami_id=ami-0d1b55a6d77a0c326"
+      - run: terraform plan -out=tfplan-europe.binary -var="ecr_registry=${{ env.ECR_REGISTRY }}" -var="aws_region=eu-west-1" -var="ami_id=ami-0d1b55a6d77a0c326" -lock=false
 
       - name: Upload plan
         uses: actions/upload-artifact@v4
@@ -209,7 +210,7 @@ jobs:
 
       - run: terraform init
       - run: terraform validate
-      - run: terraform plan -out=tfplan-usa.binary -var="ecr_registry=${{ env.ECR_REGISTRY }}" -var="aws_region=us-east-1" -var="ami_id=ami-02dfbd4ff395f2a1b"
+      - run: terraform plan -out=tfplan-usa.binary -var="ecr_registry=${{ env.ECR_REGISTRY }}" -var="aws_region=us-east-1" -var="ami_id=ami-02dfbd4ff395f2a1b" -lock=false
 
       - name: Upload plan
         uses: actions/upload-artifact@v4

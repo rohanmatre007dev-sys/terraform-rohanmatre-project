@@ -44,6 +44,8 @@ module "vpc" {
   source  = "app.terraform.io/o-aws-ia-l59wi0b2/vpc/rohanmatre"
   version = "~> 1.0"
 
+  region = var.aws_region
+
   name        = "${local.region_prefix}-healthcare-vpc"
   cidr        = var.vpc_cidr
   azs         = [local.az_a, local.az_b]
@@ -70,6 +72,8 @@ module "alb_sg" {
   source  = "app.terraform.io/o-aws-ia-l59wi0b2/security-group/rohanmatre"
   version = "~> 1.0"
 
+  region = var.aws_region
+
   name        = "${local.region_prefix}-alb-sg"
   description = "ALB SG - HTTP/HTTPS from internet"
   vpc_id      = module.vpc.vpc_id
@@ -86,6 +90,8 @@ module "alb_sg" {
 module "ec2_sg" {
   source  = "app.terraform.io/o-aws-ia-l59wi0b2/security-group/rohanmatre"
   version = "~> 1.0"
+
+  region = var.aws_region
 
   name        = "${local.region_prefix}-ec2-sg"
   description = "EC2 SG - traffic from ALB only"
@@ -107,6 +113,8 @@ module "rds_sg" {
   source  = "app.terraform.io/o-aws-ia-l59wi0b2/security-group/rohanmatre"
   version = "~> 1.0"
 
+  region = var.aws_region
+
   name        = "${local.region_prefix}-rds-sg"
   description = "RDS SG - PostgreSQL from EC2 only"
   vpc_id      = module.vpc.vpc_id
@@ -126,6 +134,8 @@ module "rds_sg" {
 module "ec2_iam_profile" {
   source  = "app.terraform.io/o-aws-ia-l59wi0b2/iam/rohanmatre"
   version = "~> 1.0"
+
+  region = var.aws_region
 
   name                    = "${local.region_prefix}-ec2-role"
   environment             = var.environment
@@ -176,6 +186,8 @@ module "ec2_az_a" {
   name        = "${local.region_prefix}-healthcare-ec2-az-a"
   environment = var.environment
 
+  region = var.aws_region
+
   ami                    = var.ami_id
   instance_type          = var.instance_type
   subnet_id              = module.vpc.private_subnet_ids[0]
@@ -204,6 +216,8 @@ module "ec2_az_b" {
 
   name        = "${local.region_prefix}-healthcare-ec2-az-b"
   environment = var.environment
+
+  region = var.aws_region
 
   ami                    = var.ami_id
   instance_type          = var.instance_type
@@ -283,6 +297,8 @@ module "rds" {
   source  = "app.terraform.io/o-aws-ia-l59wi0b2/rds/rohanmatre"
   version = "~> 1.0"
 
+  region = var.aws_region
+
   identifier     = "${local.region_prefix}-healthcare-db"
   engine         = "postgres"
   engine_version = "16.6"
@@ -337,6 +353,8 @@ module "sns" {
   name         = "${local.region_prefix}-emergency-alerts"
   display_name = "Healthcare Emergency Alerts - India"
 
+  region = var.aws_region
+
   subscriptions = {
     sqs_local = {
       protocol               = "sqs"
@@ -364,6 +382,8 @@ module "sns" {
 module "sqs" {
   source  = "app.terraform.io/o-aws-ia-l59wi0b2/sqs/rohanmatre"
   version = "~> 1.0"
+
+  region = var.aws_region
 
   name                       = "${local.region_prefix}-alert-queue"
   visibility_timeout_seconds = 60
