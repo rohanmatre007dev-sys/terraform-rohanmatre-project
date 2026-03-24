@@ -236,6 +236,8 @@ module "alb" {
   source  = "app.terraform.io/o-aws-ia-l59wi0b2/alb-nlb/rohanmatre"
   version = "~> 1.0"
 
+  region = var.aws_region
+
   name        = "${local.region_prefix}-healthcare-alb"
   environment = var.environment
   internal    = false
