@@ -120,7 +120,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.0"
+          terraform_version: "1.12.0"
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Configure AWS — ap-south-1
@@ -156,7 +156,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.0"
+          terraform_version: "1.12.0"
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Configure AWS — eu-west-1
@@ -192,7 +192,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.0"
+          terraform_version: "1.12.0"
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Configure AWS — us-east-1
@@ -248,7 +248,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.0"
+          terraform_version: "1.12.0"
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Configure AWS — ap-south-1
@@ -366,7 +366,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.0"
+          terraform_version: "1.12.0"
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Configure AWS — eu-west-1
@@ -470,7 +470,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.0"
+          terraform_version: "1.12.0"
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Configure AWS — us-east-1
@@ -560,7 +560,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.0"
+          terraform_version: "1.12.0"
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Configure AWS — us-east-1 (Route53 is global)
