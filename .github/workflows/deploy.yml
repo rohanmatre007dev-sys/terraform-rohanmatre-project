@@ -1,0 +1,588 @@
+name: Healthcare Platform — Multi-Region CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_region:
+        description: "Deploy to specific region (india/europe/usa/all)"
+        required: false
+        default: "all"
+
+env:
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  IMAGE_TAG: ${{ github.sha }}
+
+# =============================================================
+# JOB 1 — Build & Test (runs once, shared across all regions)
+# =============================================================
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Run unit tests
+        run: |
+          echo "=== Running Patient Monitoring Service Tests ==="
+          cd services/patient-monitoring
+          docker build --target test -t patient-monitoring:test .
+          docker run --rm patient-monitoring:test
+
+          echo "=== Running Emergency Alert Service Tests ==="
+          cd ../emergency-alert
+          docker build --target test -t emergency-alert:test .
+          docker run --rm emergency-alert:test
+
+          echo "=== Running Patient Data Service Tests ==="
+          cd ../patient-data
+          docker build --target test -t patient-data:test .
+          docker run --rm patient-data:test
+
+      - name: Build and push patient-monitoring image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/patient-monitoring
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/patient-monitoring:${{ env.IMAGE_TAG }}
+            ${{ env.ECR_REGISTRY }}/patient-monitoring:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push emergency-alert image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/emergency-alert
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/emergency-alert:${{ env.IMAGE_TAG }}
+            ${{ env.ECR_REGISTRY }}/emergency-alert:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push patient-data image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/patient-data
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/patient-data:${{ env.IMAGE_TAG }}
+            ${{ env.ECR_REGISTRY }}/patient-data:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save image tag for downstream jobs
+        run: echo "${{ env.IMAGE_TAG }}" > image-tag.txt
+
+      - name: Upload image tag artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-tag
+          path: image-tag.txt
+          retention-days: 1
+
+  # =============================================================
+  # JOB 2 — Terraform Plan (all 3 regions in parallel)
+  # =============================================================
+  terraform-plan-india:
+    name: Terraform Plan — India
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: infra/india
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Configure AWS — ap-south-1
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - run: terraform init
+      - run: terraform validate
+      - run: terraform plan -out=tfplan-india.binary -var="ecr_registry=${{ env.ECR_REGISTRY }}"
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-india
+          path: infra/india/tfplan-india.binary
+          retention-days: 1
+
+  terraform-plan-europe:
+    name: Terraform Plan — Europe
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: infra/europe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Configure AWS — eu-west-1
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - run: terraform init
+      - run: terraform validate
+      - run: terraform plan -out=tfplan-europe.binary -var="ecr_registry=${{ env.ECR_REGISTRY }}"
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-europe
+          path: infra/europe/tfplan-europe.binary
+          retention-days: 1
+
+  terraform-plan-usa:
+    name: Terraform Plan — USA
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: infra/usa
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Configure AWS — us-east-1
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - run: terraform init
+      - run: terraform validate
+      - run: terraform plan -out=tfplan-usa.binary -var="ecr_registry=${{ env.ECR_REGISTRY }}"
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-usa
+          path: infra/usa/tfplan-usa.binary
+          retention-days: 1
+
+  # =============================================================
+  # JOB 3a — Deploy INDIA (independent, parallel)
+  # =============================================================
+  deploy-india:
+    name: Deploy — India (ap-south-1)
+    runs-on: ubuntu-latest
+    needs: [terraform-plan-india]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event.inputs.deploy_region == 'all' || github.event.inputs.deploy_region == 'india' || github.event.inputs.deploy_region == '')
+    environment: production-india
+    defaults:
+      run:
+        working-directory: infra/india
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-india
+          path: infra/india/
+
+      - name: Download image tag
+        uses: actions/download-artifact@v4
+        with:
+          name: image-tag
+
+      - name: Read image tag
+        run: echo "IMAGE_TAG=$(cat ../../image-tag.txt)" >> $GITHUB_ENV
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Configure AWS — ap-south-1
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Terraform Apply — India
+        run: |
+          terraform init
+          terraform apply -auto-approve tfplan-india.binary
+
+      - name: Get EC2 instance IDs
+        id: ec2
+        run: |
+          IDS=$(terraform output -json ec2_instance_ids)
+          echo "instance_ids=$IDS" >> $GITHUB_OUTPUT
+
+      - name: Deploy containers via SSM — India
+        run: |
+          INSTANCE_IDS=$(echo '${{ steps.ec2.outputs.instance_ids }}' | jq -r '.[]')
+
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Deploying to $INSTANCE_ID..."
+
+            COMMAND_ID=$(aws ssm send-command \
+              --region ap-south-1 \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters commands='[
+                "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $ECR_REGISTRY",
+                "cd /opt/healthcare && docker-compose pull && docker-compose up -d --remove-orphans",
+                "docker image prune -f"
+              ]' \
+              --query "Command.CommandId" \
+              --output text)
+
+            aws ssm wait command-executed \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region ap-south-1
+
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region ap-south-1 \
+              --query "Status" --output text)
+
+            echo "Status on $INSTANCE_ID: $STATUS"
+            if [ "$STATUS" != "Success" ]; then
+              echo "DEPLOYMENT FAILED on $INSTANCE_ID"
+              exit 1
+            fi
+          done
+
+      - name: Health check — India ALB
+        run: |
+          ALB_DNS=$(terraform output -raw alb_dns_name)
+          echo "Checking: http://$ALB_DNS/health"
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://$ALB_DNS/health")
+            if [ "$STATUS" = "200" ]; then
+              echo "India health check passed (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i: status=$STATUS, retrying in 15s..."
+            sleep 15
+          done
+          echo "India health check FAILED after 10 attempts"
+          exit 1
+
+      - name: Result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "India deployment successful — Image: $IMAGE_TAG"
+          else
+            echo "India deployment FAILED — Image: $IMAGE_TAG"
+          fi
+
+  # =============================================================
+  # JOB 3b — Deploy EUROPE (independent, parallel with India)
+  # =============================================================
+  deploy-europe:
+    name: Deploy — Europe (eu-west-1)
+    runs-on: ubuntu-latest
+    needs: [terraform-plan-europe]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event.inputs.deploy_region == 'all' || github.event.inputs.deploy_region == 'europe' || github.event.inputs.deploy_region == '')
+    environment: production-europe
+    defaults:
+      run:
+        working-directory: infra/europe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-europe
+          path: infra/europe/
+
+      - name: Download image tag
+        uses: actions/download-artifact@v4
+        with:
+          name: image-tag
+
+      - name: Read image tag
+        run: echo "IMAGE_TAG=$(cat ../../image-tag.txt)" >> $GITHUB_ENV
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Configure AWS — eu-west-1
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Terraform Apply — Europe
+        run: |
+          terraform init
+          terraform apply -auto-approve tfplan-europe.binary
+
+      - name: Get EC2 instance IDs
+        id: ec2
+        run: |
+          IDS=$(terraform output -json ec2_instance_ids)
+          echo "instance_ids=$IDS" >> $GITHUB_OUTPUT
+
+      - name: Deploy containers via SSM — Europe
+        run: |
+          INSTANCE_IDS=$(echo '${{ steps.ec2.outputs.instance_ids }}' | jq -r '.[]')
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Deploying to $INSTANCE_ID..."
+            COMMAND_ID=$(aws ssm send-command \
+              --region eu-west-1 \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters commands='[
+                "aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin $ECR_REGISTRY",
+                "cd /opt/healthcare && docker-compose pull && docker-compose up -d --remove-orphans",
+                "docker image prune -f"
+              ]' \
+              --query "Command.CommandId" --output text)
+            aws ssm wait command-executed \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region eu-west-1
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region eu-west-1 \
+              --query "Status" --output text)
+            echo "Status on $INSTANCE_ID: $STATUS"
+            if [ "$STATUS" != "Success" ]; then exit 1; fi
+          done
+
+      - name: Health check — Europe ALB
+        run: |
+          ALB_DNS=$(terraform output -raw alb_dns_name)
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://$ALB_DNS/health")
+            if [ "$STATUS" = "200" ]; then echo "Europe health check passed"; exit 0; fi
+            sleep 15
+          done
+          echo "Europe health check FAILED"
+          exit 1
+
+      - name: Result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "Europe deployment successful — Image: $IMAGE_TAG"
+          else
+            echo "Europe deployment FAILED — Image: $IMAGE_TAG"
+          fi
+
+  # =============================================================
+  # JOB 3c — Deploy USA (independent, parallel with India/Europe)
+  # =============================================================
+  deploy-usa:
+    name: Deploy — USA (us-east-1)
+    runs-on: ubuntu-latest
+    needs: [terraform-plan-usa]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event.inputs.deploy_region == 'all' || github.event.inputs.deploy_region == 'usa' || github.event.inputs.deploy_region == '')
+    environment: production-usa
+    defaults:
+      run:
+        working-directory: infra/usa
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-usa
+          path: infra/usa/
+
+      - name: Download image tag
+        uses: actions/download-artifact@v4
+        with:
+          name: image-tag
+
+      - name: Read image tag
+        run: echo "IMAGE_TAG=$(cat ../../image-tag.txt)" >> $GITHUB_ENV
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Configure AWS — us-east-1
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Terraform Apply — USA
+        run: |
+          terraform init
+          terraform apply -auto-approve tfplan-usa.binary
+
+      - name: Get EC2 instance IDs
+        id: ec2
+        run: |
+          IDS=$(terraform output -json ec2_instance_ids)
+          echo "instance_ids=$IDS" >> $GITHUB_OUTPUT
+
+      - name: Deploy containers via SSM — USA
+        run: |
+          INSTANCE_IDS=$(echo '${{ steps.ec2.outputs.instance_ids }}' | jq -r '.[]')
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Deploying to $INSTANCE_ID..."
+            COMMAND_ID=$(aws ssm send-command \
+              --region us-east-1 \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters commands='[
+                "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REGISTRY",
+                "cd /opt/healthcare && docker-compose pull && docker-compose up -d --remove-orphans",
+                "docker image prune -f"
+              ]' \
+              --query "Command.CommandId" --output text)
+            aws ssm wait command-executed \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region us-east-1
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region us-east-1 \
+              --query "Status" --output text)
+            echo "Status on $INSTANCE_ID: $STATUS"
+            if [ "$STATUS" != "Success" ]; then exit 1; fi
+          done
+
+      - name: Health check — USA ALB
+        run: |
+          ALB_DNS=$(terraform output -raw alb_dns_name)
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://$ALB_DNS/health")
+            if [ "$STATUS" = "200" ]; then echo "USA health check passed"; exit 0; fi
+            sleep 15
+          done
+          echo "USA health check FAILED"
+          exit 1
+
+      - name: Result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "USA deployment successful — Image: $IMAGE_TAG"
+          else
+            echo "USA deployment FAILED — Image: $IMAGE_TAG"
+          fi
+
+  # =============================================================
+  # JOB 4 — Deploy Global Route53 (after all 3 regions)
+  # =============================================================
+  deploy-global:
+    name: Deploy — Route53 Global Routing
+    runs-on: ubuntu-latest
+    needs: [deploy-india, deploy-europe, deploy-usa]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      (needs.deploy-india.result == 'success' || needs.deploy-europe.result == 'success' || needs.deploy-usa.result == 'success')
+    defaults:
+      run:
+        working-directory: infra/global
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Configure AWS — us-east-1 (Route53 is global)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Terraform Apply — Route53 global routing
+        run: |
+          terraform init
+          terraform apply -auto-approve \
+            -var="domain_name=${{ secrets.DOMAIN_NAME }}" \
+            -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}"
+
+      - name: Pipeline summary
+        run: |
+          echo "## Multi-Region Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Region | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| India (ap-south-1)  | ${{ needs.deploy-india.result }}  |" >> $GITHUB_STEP_SUMMARY
+          echo "| Europe (eu-west-1)  | ${{ needs.deploy-europe.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| USA (us-east-1)     | ${{ needs.deploy-usa.result }}   |" >> $GITHUB_STEP_SUMMARY
+          echo "| Global Route53      | ${{ job.status }}                |" >> $GITHUB_STEP_SUMMARY
