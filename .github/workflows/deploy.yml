@@ -268,7 +268,7 @@ jobs:
       - name: Terraform Apply — India
         run: |
           terraform init
-          terraform apply -auto-approve tfplan-india.binary
+          terraform apply -auto-approve -lock=false tfplan-india.binary
 
       - name: Get EC2 instance IDs
         id: ec2
@@ -386,7 +386,7 @@ jobs:
       - name: Terraform Apply — Europe
         run: |
           terraform init
-          terraform apply -auto-approve tfplan-europe.binary
+          terraform apply -auto-approve -lock=false tfplan-europe.binary
 
       - name: Get EC2 instance IDs
         id: ec2
@@ -490,7 +490,7 @@ jobs:
       - name: Terraform Apply — USA
         run: |
           terraform init
-          terraform apply -auto-approve tfplan-usa.binary
+          terraform apply -auto-approve -lock=false tfplan-usa.binary
 
       - name: Get EC2 instance IDs
         id: ec2
